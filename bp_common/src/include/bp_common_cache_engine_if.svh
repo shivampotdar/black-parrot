@@ -51,14 +51,15 @@
     (data_width_mp+$bits(bp_cache_req_size_e) +paddr_width_mp+$bits(bp_cache_req_msg_type_e))
 
   `define declare_bp_cache_req_metadata_s(ways_mp, cache_name_mp) \
-    typedef struct packed                              \
-    {                                                  \
-      logic [`BSG_SAFE_CLOG2(ways_mp)-1:0] repl_way;   \
-      logic dirty;                                     \
+    typedef struct packed                                   \
+    {                                                       \
+      logic [`BSG_SAFE_CLOG2(ways_mp)-1:0] hit_or_repl_way; \
+      logic hit_or_repl;                                    \
+      logic dirty;                                          \
     }  bp_``cache_name_mp``_req_metadata_s
 
   `define bp_cache_req_metadata_width(ways_mp) \
-    (`BSG_SAFE_CLOG2(ways_mp)+1)
+    (`BSG_SAFE_CLOG2(ways_mp)+2)
 
     typedef enum logic [1:0]
     {// write cache block

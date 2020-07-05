@@ -416,7 +416,8 @@ module bp_fe_icache
      );
 
   // invalid way takes priority over LRU way
-  assign cache_req_metadata_cast_o.repl_way = invalid_exist ? way_invalid_index : lru_encode;
+  assign cache_req_metadata_cast_o.hit_or_repl_way = invalid_exist ? way_invalid_index : lru_encode;
+  assign cache_req_metadata_cast_o.hit_or_repl = '0;
   assign cache_req_metadata_cast_o.dirty = '0;
 
   /////////////////////////////////////////////////////////////////////////////
