@@ -70,7 +70,15 @@
     ,e_bedrock_req_wr        = 4'b0001 // Write-miss
     ,e_bedrock_req_uc_rd     = 4'b0010 // Uncached Read-miss
     ,e_bedrock_req_uc_wr     = 4'b0011 // Uncached Write-miss
-    // 4'b0100 - 4'b1111 reserved / custom
+    ,e_bedrock_req_amoswap   = 4'b0100 // Amoswap op
+    ,e_bedrock_req_amoadd    = 4'b0101 // Amoadd op
+    ,e_bedrock_req_amoxor    = 4'b0110 // Amoxor op
+    ,e_bedrock_req_amoand    = 4'b0111 // Amoand op
+    ,e_bedrock_req_amoor     = 4'b1000 // Amoor op
+    ,e_bedrock_req_amomin    = 4'b1001 // Amomin op
+    ,e_bedrock_req_amomax    = 4'b1010 // Amomax op
+    ,e_bedrock_req_amominu   = 4'b1011 // Amominu op
+    ,e_bedrock_req_amomaxu   = 4'b1100 // Amomaxu op
   } bp_bedrock_req_type_e;
 
   /*
