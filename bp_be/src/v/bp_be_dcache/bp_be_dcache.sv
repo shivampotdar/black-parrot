@@ -742,7 +742,7 @@ module bp_be_dcache
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.data_i(stat_mem_v_li & ~stat_mem_w_li)
+     ,.data_i(cache_req_v_o)
      ,.data_o(cache_req_metadata_v_o)
      );
 
