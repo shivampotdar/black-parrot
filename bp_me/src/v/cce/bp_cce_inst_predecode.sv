@@ -18,8 +18,11 @@
  *
  */
 
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
+
 module bp_cce_inst_predecode
-  import bp_cce_pkg::*;
+  import bp_me_pkg::*;
   #(parameter width_p = "inv")
   (input bp_cce_inst_s                              inst_i
    , input [width_p-1:0]                            pc_i

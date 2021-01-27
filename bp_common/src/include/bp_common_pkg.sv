@@ -1,5 +1,5 @@
-/* 
- * bp_common_pkg.svh
+/*
+ * bp_common_pkg.sv
  *
  * Contains the interface structures used for communicating between FE, BE, ME in BlackParrot.
  * Additionally contains global parameters used to configure the system. In the future, when
@@ -9,12 +9,6 @@
  */
 
 package bp_common_pkg;
-
-  `include "bsg_defines.v"
-  `include "bp_common_defines.svh"
-  `include "bp_common_core_if.svh"
-  `include "bp_common_bedrock_if.svh"
-  `include "bp_common_cache_engine_if.svh"
 
   /*
    * RV64 specifies a 64b effective address and 32b instruction.
@@ -26,40 +20,21 @@ package bp_common_pkg;
    * when they import this package, `declare the if structs. No more casting!
    */
 
-  localparam bp_instr_width_gp = 32;
+  localparam dword_width_gp       = 64;
+  localparam word_width_gp        = 32;
+  localparam half_width_gp        = 16;
+  localparam byte_width_gp        = 8;
+  localparam instr_width_gp       = 32;
+  localparam csr_addr_width_gp    = 12;
+  localparam reg_addr_width_gp    = 5;
+  localparam page_offset_width_gp = 12;
 
-  parameter bp_sv39_page_table_depth_gp = 3;
-  parameter bp_sv39_pte_width_gp = 64;
-  parameter bp_sv39_vaddr_width_gp = 39;
-  parameter bp_sv39_paddr_width_gp = 56;
-  parameter bp_sv39_ppn_width_gp = 44;
-  parameter bp_page_size_in_bytes_gp = 4096;
-  parameter bp_page_offset_width_gp = `BSG_SAFE_CLOG2(bp_page_size_in_bytes_gp);
-
-  localparam boot_dev_gp  = 0;
-  localparam host_dev_gp  = 1;
-  localparam cfg_dev_gp   = 2;
-  localparam clint_dev_gp = 3;
-  localparam cache_dev_gp = 4;
-
-                             // 0x00_0(nnnN)(D)(A_AAAA)
-  localparam boot_dev_base_addr_gp     = 32'h0000_0000;
-  localparam host_dev_base_addr_gp     = 32'h0010_0000;
-  localparam cfg_dev_base_addr_gp      = 32'h0020_0000;
-  localparam clint_dev_base_addr_gp    = 32'h0030_0000;
-  localparam cache_dev_base_addr_gp    = 32'h0040_0000;
-
-  localparam mipi_reg_base_addr_gp     = 32'h0030_0000;
-  localparam mtimecmp_reg_base_addr_gp = 32'h0030_4000;
-  localparam mtime_reg_addr_gp         = 32'h0030_bff8;
-  localparam plic_reg_base_addr_gp     = 32'h0030_b000;
-
-  localparam cache_tagfl_base_addr_gp  = 20'h0_0000;
-
-  localparam bootrom_base_addr_gp      = 40'h00_0001_0000;
-  localparam dram_base_addr_gp         = 40'h00_8000_0000;
-  localparam coproc_base_addr_gp       = 40'h10_0000_0000;
-  localparam global_base_addr_gp       = 40'h20_0000_0000;
+  `include "bp_common_addr_pkgdef.svh"
+  `include "bp_common_cfg_bus_pkgdef.svh"
+  `include "bp_common_aviary_pkgdef.svh"
+  `include "bp_common_bedrock_pkgdef.svh"
+  `include "bp_common_cfg_bus_pkgdef.svh"
+  `include "bp_common_rv64_pkgdef.svh"
 
 endpackage
 

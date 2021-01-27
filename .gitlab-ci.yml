@@ -175,6 +175,14 @@ check-design:
   script:
     - $CI_PROJECT_DIR/ci/check_design.sh $CI_CORES
 
+synth-vivado:
+  <<: *job_definition
+  stage: check
+  tags:
+    - vivado
+  script:
+    - $CI_PROJECT_DIR/ci/synth_vivado.sh $CI_CORES
+
 lint-verilator:
   <<: *job_definition
   stage: check
@@ -345,8 +353,10 @@ top-riscvdv-vcs:
   script:
     - $CI_PROJECT_DIR/ci/single_core_testlist.sh vcs RISCVDV_TESTLIST $CI_CORES
 
+# Verilator 4.104 "internal error"
 top-checkpoint-verilator:
   <<: *job_definition
+  when: manual
   stage: test-medium
   tags:
     - verilator

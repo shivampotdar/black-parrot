@@ -19,9 +19,11 @@
  *   plus one in the event that there is not an even number of way groups per CCE).
  */
 
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
+
 module bp_cce_pending_bits
   import bp_common_pkg::*;
-  import bp_cce_pkg::*;
   #(parameter num_way_groups_p            = "inv"
     , parameter cce_way_groups_p          = "inv"
     , parameter num_cce_p                 = "inv"

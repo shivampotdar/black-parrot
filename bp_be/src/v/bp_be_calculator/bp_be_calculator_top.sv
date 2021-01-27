@@ -12,18 +12,19 @@
  *     once code is more stable, fixing in cleanup could cause regressions
  */
 
+`include "bp_common_defines.svh"
+`include "bp_be_defines.svh"
+
 module bp_be_calculator_top
  import bp_common_pkg::*;
- import bp_common_aviary_pkg::*;
- import bp_common_rv64_pkg::*;
  import bp_be_pkg::*;
  #(parameter bp_params_e bp_params_p = e_bp_default_cfg
     `declare_bp_proc_params(bp_params_p)
     `declare_bp_core_if_widths(vaddr_width_p, paddr_width_p, asid_width_p, branch_metadata_fwd_width_p)
-    `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_p, dcache_block_width_p, dcache_fill_width_p, dcache)
+    `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_gp, dcache_block_width_p, dcache_fill_width_p, dcache)
 
    // Generated parameters
-   , localparam cfg_bus_width_lp        = `bp_cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p)
+   , localparam cfg_bus_width_lp        = `cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
    , localparam dispatch_pkt_width_lp   = `bp_be_dispatch_pkt_width(vaddr_width_p)
    , localparam branch_pkt_width_lp     = `bp_be_branch_pkt_width(vaddr_width_p)
    , localparam commit_pkt_width_lp     = `bp_be_commit_pkt_width(vaddr_width_p)
@@ -48,6 +49,7 @@ module bp_be_calculator_top
   , output                                          long_ready_o
   , output                                          mem_ready_o
   , output                                          sys_ready_o
+  , output                                          ptw_busy_o
 
   , output [ptw_fill_pkt_width_lp-1:0]              ptw_fill_pkt_o
   , output [commit_pkt_width_lp-1:0]                commit_pkt_o
@@ -61,7 +63,8 @@ module bp_be_calculator_top
 
   , output logic [dcache_req_width_lp-1:0]          cache_req_o
   , output logic                                    cache_req_v_o
-  , input                                           cache_req_ready_i
+  , input                                           cache_req_yumi_i
+  , input                                           cache_req_busy_i
   , output logic [dcache_req_metadata_width_lp-1:0] cache_req_metadata_o
   , output logic                                    cache_req_metadata_v_o
   , input                                           cache_req_critical_i
@@ -86,7 +89,7 @@ module bp_be_calculator_top
   );
 
   // Declare parameterizable structs
-  `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p);
+  `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p);
   `declare_bp_be_internal_if_structs(vaddr_width_p, paddr_width_p, asid_width_p, branch_metadata_fwd_width_p);
 
   // Cast input and output ports
@@ -121,8 +124,8 @@ module bp_be_calculator_top
   logic pipe_mem_store_page_fault_lo;
 
   logic pipe_ctl_data_lo_v, pipe_int_data_lo_v, pipe_aux_data_lo_v, pipe_mem_early_data_lo_v, pipe_mem_final_data_lo_v, pipe_sys_data_lo_v, pipe_mul_data_lo_v, pipe_fma_data_lo_v;
-  logic pipe_long_idata_lo_v, pipe_long_fdata_lo_v;
-  logic [dpath_width_p-1:0] pipe_ctl_data_lo, pipe_int_data_lo, pipe_aux_data_lo, pipe_mem_early_data_lo, pipe_mem_final_data_lo, pipe_sys_data_lo, pipe_mul_data_lo, pipe_fma_data_lo;
+  logic pipe_long_idata_lo_v, pipe_long_idata_lo_yumi, pipe_long_fdata_lo_v, pipe_long_fdata_lo_yumi;
+  logic [dpath_width_gp-1:0] pipe_ctl_data_lo, pipe_int_data_lo, pipe_aux_data_lo, pipe_mem_early_data_lo, pipe_mem_final_data_lo, pipe_sys_data_lo, pipe_mul_data_lo, pipe_fma_data_lo;
   rv64_fflags_s pipe_aux_fflags_lo, pipe_fma_fflags_lo;
 
   logic pipe_sys_exc_v_lo, pipe_sys_miss_v_lo;
@@ -130,12 +133,12 @@ module bp_be_calculator_top
   // Forwarding information
   logic [pipe_stage_els_lp:1]                        comp_stage_n_slice_iwb_v;
   logic [pipe_stage_els_lp:1]                        comp_stage_n_slice_fwb_v;
-  logic [pipe_stage_els_lp:1][reg_addr_width_p-1:0]  comp_stage_n_slice_rd_addr;
-  logic [pipe_stage_els_lp:1][dpath_width_p-1:0]     comp_stage_n_slice_ird;
-  logic [pipe_stage_els_lp:1][dpath_width_p-1:0]     comp_stage_n_slice_frd;
+  logic [pipe_stage_els_lp:1][reg_addr_width_gp-1:0]  comp_stage_n_slice_rd_addr;
+  logic [pipe_stage_els_lp:1][dpath_width_gp-1:0]     comp_stage_n_slice_ird;
+  logic [pipe_stage_els_lp:1][dpath_width_gp-1:0]     comp_stage_n_slice_frd;
 
   // Register bypass network
-  logic [dpath_width_p-1:0] bypass_irs1, bypass_irs2;
+  logic [dpath_width_gp-1:0] bypass_irs1, bypass_irs2;
   bp_be_bypass
    #(.depth_p(pipe_stage_els_lp), .els_p(2), .zero_x0_p(1))
    int_bypass
@@ -149,7 +152,7 @@ module bp_be_calculator_top
      ,.bypass_o({bypass_irs2, bypass_irs1})
      );
 
-  logic [dpath_width_p-1:0] bypass_frs1, bypass_frs2, bypass_frs3;
+  logic [dpath_width_gp-1:0] bypass_frs1, bypass_frs2, bypass_frs3;
   bp_be_bypass
    #(.depth_p(pipe_stage_els_lp), .els_p(3), .zero_x0_p(0))
    fp_bypass
@@ -166,9 +169,9 @@ module bp_be_calculator_top
      ,.bypass_o({bypass_frs3, bypass_frs2, bypass_frs1})
      );
 
-  logic [dpath_width_p-1:0] bypass_rs1, bypass_rs2, bypass_rs3;
+  logic [dpath_width_gp-1:0] bypass_rs1, bypass_rs2, bypass_rs3;
   bsg_mux_segmented
-   #(.segments_p(3), .segment_width_p(dpath_width_p))
+   #(.segments_p(3), .segment_width_p(dpath_width_gp))
    bypass_xrs_mux
     (.data0_i({dispatch_pkt.imm, bypass_irs2, bypass_irs1})
      ,.data1_i({bypass_frs3, bypass_frs2, bypass_frs1})
@@ -255,10 +258,12 @@ module bp_be_calculator_top
 
      ,.ptw_miss_pkt_i(ptw_miss_pkt)
      ,.ptw_fill_pkt_o(ptw_fill_pkt)
+     ,.ptw_busy_o(ptw_busy_o)
 
      ,.cache_req_o(cache_req_o)
      ,.cache_req_v_o(cache_req_v_o)
-     ,.cache_req_ready_i(cache_req_ready_i)
+     ,.cache_req_yumi_i(cache_req_yumi_i)
+     ,.cache_req_busy_i(cache_req_busy_i)
      ,.cache_req_metadata_o(cache_req_metadata_o)
      ,.cache_req_metadata_v_o(cache_req_metadata_v_o)
      ,.cache_req_critical_i(cache_req_critical_i)
@@ -307,8 +312,7 @@ module bp_be_calculator_top
      ,.cfg_bus_i(cfg_bus_i)
 
      ,.ready_o(pipe_sys_ready_lo)
-     ,.pipe_mem_ready_i(pipe_mem_ready_lo)
-     ,.pipe_long_ready_i(pipe_long_ready_lo)
+     ,.ptw_busy_i(ptw_busy_o)
 
      ,.reservation_i(reservation_r)
      ,.flush_i(flush_i)
@@ -368,9 +372,11 @@ module bp_be_calculator_top
 
      ,.iwb_pkt_o(long_iwb_pkt)
      ,.iwb_v_o(pipe_long_idata_lo_v)
+     ,.iwb_yumi_i(pipe_long_idata_lo_yumi)
 
      ,.fwb_pkt_o(long_fwb_pkt)
      ,.fwb_v_o(pipe_long_fdata_lo_v)
+     ,.fwb_yumi_i(pipe_long_fdata_lo_yumi)
      );
 
   // If a pipeline has completed an instruction (pipe_xxx_v), then mux in the calculated result.
@@ -431,8 +437,8 @@ module bp_be_calculator_top
         comp_stage_n_slice_fwb_v[i]   = comp_stage_r[i-1].frd_w_v & ~exc_stage_n[i].poison_v;
         comp_stage_n_slice_rd_addr[i] = comp_stage_r[i-1].rd_addr;
 
-        comp_stage_n_slice_ird[i]     = comp_stage_n[i].rd_data[0+:dword_width_p];
-        comp_stage_n_slice_frd[i]     = comp_stage_n[i].rd_data[0+:dpath_width_p];
+        comp_stage_n_slice_ird[i]     = comp_stage_n[i].rd_data[0+:dword_width_gp];
+        comp_stage_n_slice_frd[i]     = comp_stage_n[i].rd_data[0+:dpath_width_gp];
       end
 
   always_comb
@@ -466,15 +472,15 @@ module bp_be_calculator_top
           exc_stage_n[0].exc.ecall              |= reservation_n.decode.ecall;
 
           exc_stage_n[1].exc.dtlb_miss          |= pipe_mem_dtlb_miss_lo;
+          exc_stage_n[1].exc.load_misaligned    |= pipe_mem_load_misaligned_lo;
+          exc_stage_n[1].exc.load_access_fault  |= pipe_mem_load_access_fault_lo;
+          exc_stage_n[1].exc.load_page_fault    |= pipe_mem_load_page_fault_lo;
+          exc_stage_n[1].exc.store_misaligned   |= pipe_mem_store_misaligned_lo;
+          exc_stage_n[1].exc.store_access_fault |= pipe_mem_store_access_fault_lo;
+          exc_stage_n[1].exc.store_page_fault   |= pipe_mem_store_page_fault_lo;
 
           exc_stage_n[2].exc.dcache_miss        |= pipe_mem_dcache_miss_lo;
           exc_stage_n[2].exc.fencei_v           |= pipe_mem_fencei_lo;
-          exc_stage_n[2].exc.load_misaligned    |= pipe_mem_load_misaligned_lo;
-          exc_stage_n[2].exc.load_access_fault  |= pipe_mem_load_access_fault_lo;
-          exc_stage_n[2].exc.load_page_fault    |= pipe_mem_load_page_fault_lo;
-          exc_stage_n[2].exc.store_misaligned   |= pipe_mem_store_misaligned_lo;
-          exc_stage_n[2].exc.store_access_fault |= pipe_mem_store_access_fault_lo;
-          exc_stage_n[2].exc.store_page_fault   |= pipe_mem_store_page_fault_lo;
     end
 
   // Exception pipeline
@@ -486,8 +492,11 @@ module bp_be_calculator_top
      ,.data_o(exc_stage_r)
      );
 
-  assign iwb_pkt_o = pipe_long_idata_lo_v ? long_iwb_pkt : comp_stage_r[4];
-  assign fwb_pkt_o = pipe_long_fdata_lo_v ? long_fwb_pkt : comp_stage_r[5];
+  assign pipe_long_idata_lo_yumi = pipe_long_idata_lo_v & ~comp_stage_r[4].ird_w_v;
+  assign pipe_long_fdata_lo_yumi = pipe_long_fdata_lo_v & ~comp_stage_r[5].frd_w_v & ~comp_stage_r[5].fflags_w_v;
+
+  assign iwb_pkt_o = pipe_long_idata_lo_yumi ? long_iwb_pkt : comp_stage_r[4];
+  assign fwb_pkt_o = pipe_long_fdata_lo_yumi ? long_fwb_pkt : comp_stage_r[5];
 
   assign mem_ready_o  = pipe_mem_ready_lo;
   assign long_ready_o = pipe_long_ready_lo;

@@ -12,10 +12,12 @@
  *   coherence for a single type of LCE (I$, D$, A$, etc.).
  */
 
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
+
 module bp_cce_dir
   import bp_common_pkg::*;
-  import bp_common_aviary_pkg::*;
-  import bp_cce_pkg::*;
+  import bp_me_pkg::*;
   #(parameter bp_params_e bp_params_p = e_bp_default_cfg
     `declare_bp_proc_params(bp_params_p)
 
@@ -63,6 +65,9 @@ module bp_cce_dir
    , output logic                                                 addr_v_o
    , output logic [paddr_width_p-1:0]                             addr_o
    , output bp_cce_inst_opd_gpr_e                                 addr_dst_gpr_o
+
+   // Debug
+   , input [cce_id_width_p-1:0]                                   cce_id_i
   );
 
 

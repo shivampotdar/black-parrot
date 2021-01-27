@@ -10,10 +10,7 @@
 
 module test_bp
  import bp_common_pkg::*;
- import bp_common_aviary_pkg::*;
  import bp_be_pkg::*;
- import bp_common_rv64_pkg::*;
- import bp_cce_pkg::*;
 #();
 
 logic clk, reset;

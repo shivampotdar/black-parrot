@@ -11,10 +11,11 @@
  *
  */
 
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
+
 module bp_me_nonsynth_mock_lce
   import bp_common_pkg::*;
-  import bp_common_aviary_pkg::*;
-  import bp_cce_pkg::*;
   import bp_me_nonsynth_pkg::*;
   #(parameter bp_params_e bp_params_p = e_bp_unicore_half_cfg
     `declare_bp_proc_params(bp_params_p)
@@ -26,7 +27,7 @@ module bp_me_nonsynth_mock_lce
     , localparam block_idx_width_lp=`BSG_SAFE_CLOG2(cce_block_width_p)
 
     , localparam lce_opcode_width_lp=$bits(bp_me_nonsynth_lce_opcode_e)
-    , localparam tr_ring_width_lp=`bp_me_nonsynth_lce_tr_pkt_width(paddr_width_p, dword_width_p)
+    , localparam tr_ring_width_lp=`bp_me_nonsynth_lce_tr_pkt_width(paddr_width_p, dword_width_gp)
 
     , localparam block_offset_bits_lp=`BSG_SAFE_CLOG2(block_size_in_bytes_lp)
 
@@ -85,8 +86,8 @@ module bp_me_nonsynth_mock_lce
   );
 
   initial begin
-    assert(dword_width_p == 64) else
-      $error("dword_width_p must be 64");
+    assert(dword_width_gp == 64) else
+      $error("dword_width_gp must be 64");
     assert(cce_block_width_p >= 64) else $error("cce_block_width_p must be at least 64-bits");
     assert(`BSG_IS_POW2(cce_block_width_p)) else $error("cce_block_width_p must be a power of two");
   end
@@ -95,7 +96,7 @@ module bp_me_nonsynth_mock_lce
   `declare_bp_bedrock_lce_if(paddr_width_p, cce_block_width_p, lce_id_width_p, cce_id_width_p, lce_assoc_p, lce);
 
   // LCE TR Packet struct
-  `declare_bp_me_nonsynth_lce_tr_pkt_s(paddr_width_p, dword_width_p);
+  `declare_bp_me_nonsynth_lce_tr_pkt_s(paddr_width_p, dword_width_gp);
 
   // Tag+State struct
   `declare_bp_cce_dir_entry_s(ptag_width_lp);
@@ -229,8 +230,8 @@ module bp_me_nonsynth_mock_lce
   assign byte_offset = cmd.paddr[2:0];
 
   // Data word (64-bit) targeted by current trace replay command
-  logic [dword_width_p-1:0] load_dword;
-  assign load_dword = data_lo[mshr_r.lru_way][block_idx_width_lp'(dword_width_p*dword_offset) +: dword_width_p];
+  logic [dword_width_gp-1:0] load_dword;
+  assign load_dword = data_lo[mshr_r.lru_way][block_idx_width_lp'(dword_width_gp*dword_offset) +: dword_width_gp];
   logic word_sigext, half_sigext, byte_sigext;
   logic [31:0] load_word;
   logic [15:0] load_half;
@@ -325,6 +326,8 @@ module bp_me_nonsynth_mock_lce
     ,UNCACHED_TR_CMD
     ,UNCACHED_SEND_REQ
     ,UNCACHED_SEND_TR_RESP
+    ,UNCACHED_WB_RD
+    ,UNCACHED_WB
 
     ,LCE_DATA_CMD
 
@@ -423,7 +426,7 @@ module bp_me_nonsynth_mock_lce
           : e_bedrock_msg_size_8;
 
   // uncached load data extraction
-  wire [dword_width_p-1:0] uc_load_dword = lce_cmd.data[0 +: dword_width_p];
+  wire [dword_width_gp-1:0] uc_load_dword = lce_cmd.data[0 +: dword_width_gp];
   logic [31:0] uc_load_word;
   logic [15:0] uc_load_half;
   logic [7:0] uc_load_byte;
@@ -519,7 +522,7 @@ module bp_me_nonsynth_mock_lce
         // If the CCE will skip initialization and operate in uncached only
         // mode, go to UNCACHED_ONLY. If the CCE will run in normal mode, go
         // to CLEAR_STATE to reset tag, data, and dirty_bits.
-        lce_state_n = (skip_init_p) ? UNCACHED_ONLY : CLEAR_STATE;
+        lce_state_n = CLEAR_STATE;
       end
       CLEAR_STATE: begin
         // clear all tag, data, and dirty bit state
@@ -540,7 +543,11 @@ module bp_me_nonsynth_mock_lce
 
         cnt_rst = (cnt == counter_width_p'(sets_p));
         cnt_inc = ~cnt_rst;
-        lce_state_n = (cnt_rst) ? INIT : CLEAR_STATE;
+        lce_state_n = (cnt_rst)
+                      ? (skip_init_p)
+                        ? UNCACHED_ONLY
+                        : INIT
+                      : CLEAR_STATE;
       end
       // Until all syncs occur, all requests will be uncached
       UNCACHED_ONLY: begin
@@ -593,7 +600,7 @@ module bp_me_nonsynth_mock_lce
               ? e_bedrock_msg_size_2
               : e_bedrock_msg_size_1;
 
-        lce_req.data[0+:dword_width_p] = (mshr_r.store_op) ? cmd.data : '0;
+        lce_req.data[0+:dword_width_gp] = (mshr_r.store_op) ? cmd.data : '0;
 
         // wait for LCE req outbound to be ready (r&v), then wait for responses
         lce_state_n = (lce_req_ready_i)
@@ -646,7 +653,73 @@ module bp_me_nonsynth_mock_lce
           // clear miss handling state
           mshr_n = (tr_pkt_ready_i) ? '0 : mshr_r;
 
+        end else if (lce_cmd_v_i & lce_cmd.header.msg_type.cmd == e_bedrock_cmd_st_wb) begin
+          // Set Tag command, write tags based on command, do not send any response
+          tag_v_li = 1'b1;
+          tag_w_li = 1'b1;
+          tag_addr_li = lce_cmd.header.addr[block_offset_bits_lp +: lg_sets_lp];
+          tag_data_li[lce_cmd_payload.way_id] = '{tag: lce_cmd.header.addr[paddr_width_p-1 -: ptag_width_lp]
+                                                   , state: lce_cmd_payload.state};
+          tag_w_mask_li[lce_cmd_payload.way_id] = '{tag: '1, state: e_COH_O};
+
+          lce_state_n = UNCACHED_WB_RD;
         end
+      end
+      UNCACHED_WB_RD: begin
+        tag_v_li = 1'b1;
+        tag_addr_li = lce_cmd.header.addr[block_offset_bits_lp +: lg_sets_lp];
+        data_v_li = 1'b1;
+        data_addr_li = lce_cmd.header.addr[block_offset_bits_lp +: lg_sets_lp];
+        dirty_bits_v_li = 1'b1;
+        dirty_bits_addr_li = lce_cmd.header.addr[block_offset_bits_lp +: lg_sets_lp];
+        lce_state_n = UNCACHED_WB;
+      end
+      UNCACHED_WB: begin
+
+        // handshake
+        lce_resp_v_o = lce_resp_ready_i & lce_cmd_v_i;
+        lce_cmd_yumi_o = lce_resp_v_o;
+
+        // reread tag, data, dirty bits if response does not send
+        tag_v_li = ~lce_resp_v_o;
+        tag_addr_li = lce_cmd.header.addr[block_offset_bits_lp +: lg_sets_lp];
+
+        data_v_li = ~lce_resp_v_o;
+        data_addr_li = lce_cmd.header.addr[block_offset_bits_lp +: lg_sets_lp];
+
+        // dirty bits are always used; either re-read or they are being written because response
+        // message was sent
+        dirty_bits_v_li = 1'b1;
+        dirty_bits_addr_li = lce_cmd.header.addr[block_offset_bits_lp +: lg_sets_lp];
+
+        // writeback cmd
+
+        lce_resp_payload.dst_id = lce_cmd_payload.src_id;
+        lce_resp_payload.src_id = lce_id_i;
+        lce_resp.header.payload = lce_resp_payload;
+        lce_resp.header.addr = lce_cmd.header.addr;
+
+        if (dirty_bits_data_lo[lce_cmd_payload.way_id]) begin
+          lce_resp.data = data_lo[lce_cmd_payload.way_id];
+          lce_resp.header.msg_type.resp = e_bedrock_resp_wb;
+          lce_resp.header.size = msg_block_size;
+
+          // clear the dirty bit - but only do the write if the data response is accepted
+          // (this prevents the dirty bit from being cleared before the response is sent, which
+          //  could result in a null_wb being sent when an actual wb should have been)
+          dirty_bits_w_li = lce_resp_v_o;
+          dirty_bits_w_mask_li[lce_cmd_payload.way_id] = 1'b1;
+          dirty_bits_data_li[lce_cmd_payload.way_id] = 1'b0;
+
+        end else begin
+          lce_resp.data = '0;
+          lce_resp.header.msg_type.resp = e_bedrock_resp_null_wb;
+          lce_resp.header.size = e_bedrock_msg_size_1;
+
+        end
+
+        lce_state_n = (lce_resp_v_o) ? UNCACHED_SEND_TR_RESP : UNCACHED_WB;
+
       end
       INIT: begin
 
@@ -907,11 +980,11 @@ module bp_me_nonsynth_mock_lce
         // all information needed to respond is stored in mshr
 
         // Common LCE Resp fields
-        lce_resp_payload.dst_id = mshr_r.cce;
+        lce_resp_payload.dst_id = lce_cmd_r_payload.src_id;
         lce_resp_payload.src_id = lce_id_i;
         lce_resp.header.payload = lce_resp_payload;
         lce_resp.header.msg_type.resp = e_bedrock_resp_coh_ack;
-        lce_resp.header.addr = mshr_r.paddr;
+        lce_resp.header.addr = lce_cmd_r.header.addr;
 
         lce_resp_v_o = lce_resp_ready_i;
 
@@ -1224,7 +1297,7 @@ module bp_me_nonsynth_mock_lce
    * LCE AXE / Memory Consistency Tracing
    */
 
-  localparam lg_dword_bytes_lp=`BSG_SAFE_CLOG2(dword_width_p/8);
+  localparam lg_dword_bytes_lp=`BSG_SAFE_CLOG2(dword_width_gp/8);
 
   always_ff @(posedge clk_i) begin
     if (axe_trace_p) begin

@@ -15,9 +15,12 @@
  *
  */
 
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
+
 module bp_cce_dir_segment
   import bp_common_pkg::*;
-  import bp_cce_pkg::*;
+  import bp_me_pkg::*;
   #(parameter tag_sets_p                  = "inv" // number of tag sets tracked by this directory
     , parameter num_lce_p                 = "inv" // number of LCEs tracked in this directory
     // parameters of cache type being tracked

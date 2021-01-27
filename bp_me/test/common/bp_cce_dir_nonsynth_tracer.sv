@@ -8,9 +8,11 @@
  *
  */
 
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
+
 module bp_cce_dir_nonsynth_tracer
   import bp_common_pkg::*;
-  import bp_cce_pkg::*;
   #(parameter cce_id_width_p            = "inv"
     , localparam cce_dir_trace_file_p   = "cce_dir"
   )

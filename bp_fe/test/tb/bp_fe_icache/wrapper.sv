@@ -1,25 +1,21 @@
 module wrapper
   import bp_common_pkg::*;
-  import bp_common_aviary_pkg::*;
-  import bp_common_cfg_link_pkg::*;
   import bp_fe_pkg::*;
-  import bp_fe_icache_pkg::*;
-  import bp_cce_pkg::*;
   import bp_me_pkg::*;
   #(parameter bp_params_e bp_params_p = BP_CFG_FLOWVAR
   , parameter uce_p = 1
   `declare_bp_proc_params(bp_params_p)
   `declare_bp_bedrock_lce_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, cce_id_width_p, lce_assoc_p, lce)
   `declare_bp_bedrock_mem_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce)
-  `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, icache_sets_p, icache_assoc_p, dword_width_p, icache_block_width_p, icache_fill_width_p, icache)
+  `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, icache_sets_p, icache_assoc_p, dword_width_gp, icache_block_width_p, icache_fill_width_p, icache)
 
-  , localparam cfg_bus_width_lp = `bp_cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p)
+  , localparam cfg_bus_width_lp = `cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
   , localparam wg_per_cce_lp = (lce_sets_p / num_cce_p)
   , localparam lg_icache_assoc_lp = `BSG_SAFE_CLOG2(icache_assoc_p)
   , localparam way_id_width_lp=`BSG_SAFE_CLOG2(icache_assoc_p)
   , localparam block_size_in_words_lp=icache_assoc_p
   , localparam bank_width_lp = icache_block_width_p / icache_assoc_p
-  , localparam num_dwords_per_bank_lp = bank_width_lp / dword_width_p
+  , localparam num_dwords_per_bank_lp = bank_width_lp / dword_width_gp
   , localparam data_mem_mask_width_lp=(bank_width_lp>>3)
   , localparam byte_offset_width_lp=`BSG_SAFE_CLOG2(bank_width_lp>>3)
   , localparam word_offset_width_lp=`BSG_SAFE_CLOG2(block_size_in_words_lp)
@@ -41,7 +37,7 @@ module wrapper
 
   , input                             uncached_i
 
-  , output [instr_width_p-1:0]        data_o
+  , output [instr_width_gp-1:0]        data_o
   , output                            data_v_o
 
   , input [cce_mem_msg_width_lp-1:0]        mem_resp_i
@@ -53,7 +49,7 @@ module wrapper
   , input                                   mem_cmd_ready_i
   );
 
-  `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p);
+  `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p);
   bp_cfg_bus_s cfg_bus_cast_i;
   assign cfg_bus_cast_i = cfg_bus_i;
 
@@ -62,7 +58,7 @@ module wrapper
 
   // I$-LCE Interface signals
   // Miss, Management Interfaces
-  logic cache_req_ready_li;
+  logic cache_req_yumi_li, cache_req_busy_li;
   logic [icache_req_width_lp-1:0] cache_req_lo;
   logic cache_req_v_lo;
   logic [icache_req_metadata_width_lp-1:0] cache_req_metadata_lo;
@@ -196,14 +192,16 @@ module wrapper
     ,.ptag_i(rolly_ptag_r)
     ,.ptag_v_i(ptag_v_r)
     ,.uncached_i(uncached_r)
-    ,.poison_i(poison_li)
+    ,.poison_tl_i(poison_li)
 
     ,.data_o(data_o)
     ,.data_v_o(data_v_o)
+    ,.poison_tv_i(1'b0)
 
-    ,.cache_req_ready_i(cache_req_ready_li)
     ,.cache_req_o(cache_req_lo)
     ,.cache_req_v_o(cache_req_v_lo)
+    ,.cache_req_yumi_i(cache_req_yumi_li)
+    ,.cache_req_busy_i(cache_req_busy_li)
     ,.cache_req_metadata_o(cache_req_metadata_lo)
     ,.cache_req_metadata_v_o(cache_req_metadata_v_lo)
     ,.cache_req_critical_i(cache_req_critical_li)
@@ -254,7 +252,8 @@ module wrapper
 
       ,.cache_req_v_i(cache_req_v_lo)
       ,.cache_req_i(cache_req_lo)
-      ,.cache_req_ready_o(cache_req_ready_li)
+      ,.cache_req_yumi_o(cache_req_yumi_li)
+      ,.cache_req_busy_o(cache_req_busy_li)
       ,.cache_req_metadata_i(cache_req_metadata_lo)
       ,.cache_req_metadata_v_i(cache_req_metadata_v_lo)
       ,.cache_req_critical_o(cache_req_critical_li)
@@ -366,7 +365,8 @@ module wrapper
 
       ,.cache_req_i(cache_req_lo)
       ,.cache_req_v_i(cache_req_v_lo)
-      ,.cache_req_ready_o(cache_req_ready_li)
+      ,.cache_req_yumi_o(cache_req_yumi_li)
+      ,.cache_req_busy_o(cache_req_busy_li)
       ,.cache_req_metadata_i(cache_req_metadata_lo)
       ,.cache_req_metadata_v_i(cache_req_metadata_v_lo)
       ,.cache_req_critical_o(cache_req_critical_li)

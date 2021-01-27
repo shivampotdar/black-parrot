@@ -11,15 +11,13 @@
  *
  */
 
-// TODO:
-// 1. support locally uncached, globally cached/coherent
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
 
 module bp_cce_msg
   import bp_common_pkg::*;
-  import bp_common_aviary_pkg::*;
-  import bp_cce_pkg::*;
   import bp_me_pkg::*;
-  #(parameter bp_params_p                  = e_bp_default_cfg
+  #(parameter bp_params_e bp_params_p      = e_bp_default_cfg
     `declare_bp_proc_params(bp_params_p)
 
     // Derived parameters
@@ -36,7 +34,7 @@ module bp_cce_msg
 
     // Interface Widths
     , localparam mshr_width_lp             = `bp_cce_mshr_width(lce_id_width_p, lce_assoc_p, paddr_width_p)
-    , localparam cfg_bus_width_lp          = `bp_cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p)
+    , localparam cfg_bus_width_lp          = `cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
     `declare_bp_bedrock_lce_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, cce_id_width_p, lce_assoc_p, lce)
     `declare_bp_bedrock_mem_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce)
 
@@ -121,7 +119,7 @@ module bp_cce_msg
   `declare_bp_bedrock_mem_if(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce);
 
   // Config Interface
-  `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p);
+  `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p);
 
   // MSHR
   `declare_bp_cce_mshr_s(lce_id_width_p, lce_assoc_p, paddr_width_p);
@@ -245,6 +243,17 @@ module bp_cce_msg
     (.i(pe_lce_id)
      ,.o(pe_lce_id_one_hot)
      );
+
+  // CCE coherence PMA - Mem responses
+  logic resp_pma_coherent_addr_lo;
+  bp_cce_pma
+    #(.bp_params_p(bp_params_p)
+      )
+    resp_pma
+      (.paddr_i(mem_resp.header.addr)
+       ,.paddr_v_i(mem_resp_v_i)
+       ,.cacheable_addr_o(resp_pma_coherent_addr_lo)
+       );
 
   // Uncached only mode FSM states
   typedef enum logic [1:0] {
@@ -448,7 +457,6 @@ module bp_cce_msg
       if (auto_fwd_msg_i) begin
         if (mem_resp_v_i) begin
           // Uncached load response - forward data to LCE
-          // This transaction does not modify the pending bits
           if (mem_resp.header.msg_type.mem == e_bedrock_mem_uc_rd) begin
             // handshaking
             lce_cmd_v_o = mem_resp_v_i & lce_cmd_ready_i;
@@ -465,10 +473,16 @@ module bp_cce_msg
             lce_cmd.header.addr = mem_resp.header.addr;
             // Data is copied directly from the Mem Data Response
             lce_cmd.data = mem_resp.data;
+
+            // decrement pending bit if uncached to cacheable/coherent memory
+            pending_w_v_o = mem_resp_yumi_o & resp_pma_coherent_addr_lo;
+            pending_w_addr_o = mem_resp.header.addr;
+            pending_w_addr_bypass_o = 1'b0;
+            pending_o = 1'b0;
+
           end // uncached read response
 
           // Uncached store response - send uncached store done command on LCE Command
-          // This transaction does not modify the pending bits
           else if (mem_resp.header.msg_type.mem == e_bedrock_mem_uc_wr) begin
             // handshaking
             lce_cmd_v_o = mem_resp_v_i & lce_cmd_ready_i;
@@ -484,6 +498,13 @@ module bp_cce_msg
             lce_cmd_payload.src_id = cfg_bus_cast.cce_id;
             lce_cmd.header.payload = lce_cmd_payload;
             lce_cmd.header.addr = mem_resp.header.addr;
+
+            // decrement pending bit if uncached to cacheable/coherent memory
+            pending_w_v_o = mem_resp_yumi_o & resp_pma_coherent_addr_lo;
+            pending_w_addr_o = mem_resp.header.addr;
+            pending_w_addr_bypass_o = 1'b0;
+            pending_o = 1'b0;
+
           end // uncached store response
 
           // Writeback response - clears the pending bit

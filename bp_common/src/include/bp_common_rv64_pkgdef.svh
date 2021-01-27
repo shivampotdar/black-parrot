@@ -1,8 +1,5 @@
-
-package bp_common_rv64_pkg;
-
-  `include "bp_common_rv64_defines.svh"
-  `include "bp_common_csr_defines.svh"
+`ifndef BP_COMMON_RV64_PKGDEF_SVH
+`define BP_COMMON_RV64_PKGDEF_SVH
 
   localparam rv64_rf_els_gp         = 32;
   localparam rv64_instr_width_gp    = 32;
@@ -172,5 +169,40 @@ package bp_common_rv64_pkg;
     logic        n_inf;
   }  rv64_fclass_s;
 
-endpackage
+  /*
+   * RV64 specifies a 64b effective address and 32b instruction.
+   * BlackParrot supports SV39 virtual memory, which specifies 39b virtual / 56b physical address.
+   * Effective addresses must have bits 39-63 match bit 38
+   *   or a page fault exception will occur during translation.
+   * Currently, we only support a very limited number of parameter configurations.
+   * Thought: We could have a `define surrounding core instantiations of each parameter and then
+   * when they import this package, `declare the if structs. No more casting!
+   */
+
+  localparam sv39_pte_width_gp          = 64;
+  localparam sv39_levels_gp             = 3;
+  localparam sv39_vaddr_width_gp        = 39;
+  localparam sv39_paddr_width_gp        = 56;
+  localparam sv39_ppn_width_gp          = 44;
+  localparam sv39_page_idx_width_gp     = 9;
+  localparam sv39_page_offset_width_gp  = 12;
+  localparam sv39_page_size_in_bytes_gp = 1 << sv39_page_offset_width_gp;
+  localparam sv39_pte_size_in_bytes_gp  = 8;
+
+  typedef struct packed
+  {
+    logic [sv39_pte_width_gp-10-sv39_ppn_width_gp-1:0] reserved;
+    logic [sv39_ppn_width_gp-1:0] ppn;
+    logic [1:0] rsw;
+    logic d;
+    logic a;
+    logic g;
+    logic u;
+    logic x;
+    logic w;
+    logic r;
+    logic v;
+  }  sv39_pte_s;
+
+`endif
 

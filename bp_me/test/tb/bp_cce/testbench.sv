@@ -6,10 +6,6 @@
 
 module testbench
  import bp_common_pkg::*;
- import bp_common_aviary_pkg::*;
- import bp_common_rv64_pkg::*;
- import bp_common_cfg_link_pkg::*;
- import bp_cce_pkg::*;
  import bp_me_pkg::*;
  import bp_me_nonsynth_pkg::*;
  #(parameter bp_params_e bp_params_p = BP_CFG_FLOWVAR // Replaced by the flow with a specific bp_cfg
@@ -18,12 +14,15 @@ module testbench
    // interface widths
    `declare_bp_bedrock_lce_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, cce_id_width_p, lce_assoc_p, lce)
    `declare_bp_bedrock_mem_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce)
+   `declare_bp_bedrock_mem_if_widths(paddr_width_p, dword_width_gp, lce_id_width_p, lce_assoc_p, xce)
 
    , parameter cce_trace_p = 0
+   , parameter cce_dir_trace_p = 0
    , parameter axe_trace_p = 0
    , parameter instr_count = 1
    , parameter skip_init_p = 0
    , parameter lce_trace_p = 0
+   , parameter lce_tr_trace_p = 0
    , parameter dram_trace_p = 0
    , parameter dram_fixed_latency_p=0
 
@@ -41,7 +40,7 @@ module testbench
 
    // LCE Trace Replay Width
    , localparam lce_opcode_width_lp=$bits(bp_me_nonsynth_lce_opcode_e)
-   , localparam tr_ring_width_lp=`bp_me_nonsynth_lce_tr_pkt_width(paddr_width_p, dword_width_p)
+   , localparam tr_ring_width_lp=`bp_me_nonsynth_lce_tr_pkt_width(paddr_width_p, dword_width_gp)
    , localparam tr_rom_addr_width_p = 20
 
    )
@@ -62,14 +61,19 @@ function int get_sim_period();
   return (`BP_SIM_CLK_PERIOD);
 endfunction
 
-`declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p);
+`declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p);
 `declare_bp_bedrock_lce_if(paddr_width_p, cce_block_width_p, lce_id_width_p, cce_id_width_p, lce_assoc_p, lce);
 `declare_bp_bedrock_mem_if(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce);
+`declare_bp_bedrock_mem_if(paddr_width_p, dword_width_gp, lce_id_width_p, lce_assoc_p, xce);
 
 // CFG IF
-bp_cfg_bus_s           cfg_bus_lo;
+bp_cfg_bus_s             cfg_bus_lo;
 bp_bedrock_cce_mem_msg_s cfg_mem_cmd_lo;
-logic                  cfg_mem_cmd_v_lo, cfg_mem_cmd_ready_li;
+bp_bedrock_xce_mem_msg_s cfg_mem_cmd;
+logic                    cfg_mem_cmd_v_lo, cfg_mem_cmd_ready_li;
+assign cfg_mem_cmd = '{header: cfg_mem_cmd_lo.header
+                      ,data: cfg_mem_cmd_lo.data[0+:dword_width_gp]
+                      };
 
 // CCE-MEM IF
 bp_bedrock_cce_mem_msg_s mem_resp;
@@ -179,6 +183,24 @@ bind bp_me_nonsynth_mock_lce
       ,.lce_cmd_o_ready_i(lce_cmd_ready_i)
       );
 
+bind bp_me_nonsynth_mock_lce
+  bp_me_nonsynth_lce_tr_tracer
+    #(.bp_params_p(bp_params_p)
+      ,.sets_p(sets_p)
+      ,.block_width_p(cce_block_width_p)
+      )
+    lce_tr_tracer
+     (.clk_i(clk_i & (testbench.lce_tr_trace_p == 1))
+      ,.reset_i(reset_i)
+      ,.lce_id_i(lce_id_i)
+      ,.tr_pkt_i(tr_pkt_i)
+      ,.tr_pkt_v_i(tr_pkt_v_i)
+      ,.tr_pkt_yumi_i(tr_pkt_yumi_o)
+      ,.tr_pkt_o_i(tr_pkt_o)
+      ,.tr_pkt_v_o_i(tr_pkt_v_o)
+      ,.tr_pkt_ready_i(tr_pkt_ready_i)
+      );
+
 bind bp_cce_wrapper
   bp_me_nonsynth_cce_tracer
     #(.bp_params_p(bp_params_p))
@@ -212,6 +234,38 @@ bind bp_cce_wrapper
       ,.mem_cmd_v_i(mem_cmd_v_o)
       ,.mem_cmd_ready_i(mem_cmd_ready_i)
       );
+
+bind bp_cce_dir
+  bp_me_nonsynth_cce_dir_tracer
+    #(.bp_params_p(bp_params_p))
+    cce_dir_tracer
+     (.clk_i(clk_i & (testbench.cce_dir_trace_p == 1))
+      ,.reset_i(reset_i)
+
+      ,.cce_id_i(cce_id_i)
+      ,.addr_i(addr_i)
+      ,.addr_bypass_i(addr_bypass_i)
+      ,.lce_i(lce_i)
+      ,.way_i(way_i)
+      ,.lru_way_i(lru_way_i)
+      ,.coh_state_i(coh_state_i)
+      ,.addr_dst_gpr_i(addr_dst_gpr_i)
+      ,.cmd_i(cmd_i)
+      ,.r_v_i(r_v_i)
+      ,.w_v_i(w_v_i)
+      ,.busy_i(busy_o)
+      ,.sharers_v_i(sharers_v_o)
+      ,.sharers_hits_i(sharers_hits_o)
+      ,.sharers_ways_i(sharers_ways_o)
+      ,.sharers_coh_states_i(sharers_coh_states_o)
+      ,.lru_v_i(lru_v_o)
+      ,.lru_coh_state_i(lru_coh_state_o)
+      ,.lru_addr_i(lru_addr_o)
+      ,.addr_v_i(addr_v_o)
+      ,.addr_o_i(addr_o)
+      ,.addr_dst_gpr_o_i(addr_dst_gpr_o)
+      );
+
 
 bsg_two_fifo
 #(.width_p(lce_req_msg_width_lp)
@@ -264,8 +318,8 @@ lce_cmd_buffer
 logic cce_ucode_v_li;
 logic cce_ucode_w_li;
 logic [cce_pc_width_p-1:0] cce_ucode_addr_li;
-logic [cce_instr_width_p-1:0] cce_ucode_data_li;
-logic [cce_instr_width_p-1:0] cce_ucode_data_lo;
+logic [cce_instr_width_gp-1:0] cce_ucode_data_li;
+logic [cce_instr_width_gp-1:0] cce_ucode_data_lo;
 
 // CCE
 wrapper
@@ -404,7 +458,7 @@ bp_cfg
   (.clk_i(clk_i)
    ,.reset_i(reset_i)
 
-   ,.mem_cmd_i(cfg_mem_cmd_lo)
+   ,.mem_cmd_i(cfg_mem_cmd)
    ,.mem_cmd_v_i(cfg_mem_cmd_v_lo)
    ,.mem_cmd_ready_o(cfg_mem_cmd_ready_li)
 

@@ -1,17 +1,13 @@
 /**
  *
- * wrapper.v
+ * wrapper.sv
  *
  */
 
 module wrapper
  import bp_common_pkg::*;
- import bp_common_aviary_pkg::*;
  import bp_be_pkg::*;
- import bp_common_rv64_pkg::*;
  import bp_me_pkg::*;
- import bp_cce_pkg::*;
- import bp_be_dcache_pkg::*;
  #(parameter bp_params_e bp_params_p = e_bp_default_cfg
   ,parameter uce_p = 1
   ,parameter wt_p = 1
@@ -19,18 +15,18 @@ module wrapper
    `declare_bp_proc_params(bp_params_p)
    `declare_bp_bedrock_lce_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, cce_id_width_p, lce_assoc_p, lce)
    `declare_bp_bedrock_mem_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce)
-   `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_p, dcache_block_width_p, dcache_fill_width_p, dcache)
+   `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_gp, dcache_block_width_p, dcache_fill_width_p, dcache)
 
    , parameter debug_p=0
    , parameter lock_max_limit_p=8
 
-   , localparam cfg_bus_width_lp= `bp_cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p)
+   , localparam cfg_bus_width_lp= `cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
    , localparam block_size_in_words_lp=dcache_assoc_p
    , localparam way_id_width_lp=`BSG_SAFE_CLOG2(dcache_assoc_p)
 
    , localparam wg_per_cce_lp = (lce_sets_p / num_cce_p)
 
-   , localparam dcache_pkt_width_lp=`bp_be_dcache_pkt_width(page_offset_width_p,dpath_width_p)
+   , localparam dcache_pkt_width_lp=$bits(bp_be_dcache_pkt_s)
 
    , localparam lce_cce_req_packet_width_lp = `bsg_wormhole_concentrator_packet_width(coh_noc_cord_width_p, coh_noc_len_width_p, coh_noc_cid_width_p, lce_req_msg_width_lp)
    , localparam lce_cce_req_packet_hdr_width_lp = (lce_cce_req_packet_width_lp-cce_block_width_p)
@@ -47,7 +43,7 @@ module wrapper
    , input [num_caches_p-1:0][ptag_width_p-1:0]        ptag_i
    , input [num_caches_p-1:0]                          uncached_i
 
-   , output logic [num_caches_p-1:0][dword_width_p-1:0]data_o
+   , output logic [num_caches_p-1:0][dword_width_gp-1:0]data_o
    , output logic [num_caches_p-1:0]                   v_o
 
    , input                                             mem_resp_v_i
@@ -58,8 +54,6 @@ module wrapper
    , output logic [cce_mem_msg_width_lp-1:0]           mem_cmd_o
    , input                                             mem_cmd_ready_i
    );
-
-   `declare_bp_be_dcache_pkt_s(page_offset_width_p, dpath_width_p);
 
    // Cache to Rolly FIFO signals
    logic [num_caches_p-1:0] dcache_ready_lo;
@@ -72,7 +66,7 @@ module wrapper
    // D$ - LCE Interface signals
    // Miss, Management Interfaces
    logic [num_caches_p-1:0] cache_req_v_lo, cache_req_metadata_v_lo;
-   logic [num_caches_p-1:0] cache_req_ready_lo;
+   logic [num_caches_p-1:0] cache_req_yumi_lo, cache_req_busy_lo;
    logic [num_caches_p-1:0] cache_req_complete_lo, cache_req_critical_lo;
    logic [num_caches_p-1:0][dcache_req_width_lp-1:0] cache_req_lo;
    logic [num_caches_p-1:0][dcache_req_metadata_width_lp-1:0] cache_req_metadata_lo;
@@ -94,9 +88,9 @@ module wrapper
    logic [num_caches_p-1:0] rolly_uncached_r;
    logic [num_caches_p-1:0] is_store, is_store_rr, dcache_v_rr, poison_li;
 
-   logic [num_caches_p-1:0][dpath_width_p-1:0] early_data_lo;
+   logic [num_caches_p-1:0][dpath_width_gp-1:0] early_data_lo;
    logic [num_caches_p-1:0] early_v_lo;
-   logic [num_caches_p-1:0][dpath_width_p-1:0] final_data_lo;
+   logic [num_caches_p-1:0][dpath_width_gp-1:0] final_data_lo;
    logic [num_caches_p-1:0] final_v_lo;
 
    logic [num_caches_p-1:0] lce_req_v_lo, lce_resp_v_lo;
@@ -118,7 +112,7 @@ module wrapper
    bp_bedrock_lce_resp_msg_s [num_caches_p-1:0] lce_resp_lo;
    bp_bedrock_lce_resp_msg_s cce_lce_resp_li;
 
-   `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p);
+   `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p);
    bp_cfg_bus_s cfg_bus_cast_i;
    assign cfg_bus_cast_i = cfg_bus_i;
 
@@ -222,7 +216,8 @@ module wrapper
        ,.cache_req_o(cache_req_lo[i])
        ,.cache_req_metadata_o(cache_req_metadata_lo[i])
        ,.cache_req_metadata_v_o(cache_req_metadata_v_lo[i])
-       ,.cache_req_ready_i(cache_req_ready_lo[i])
+       ,.cache_req_yumi_i(cache_req_yumi_lo[i])
+       ,.cache_req_busy_i(cache_req_busy_lo[i])
        ,.cache_req_complete_i(cache_req_complete_lo[i])
        ,.cache_req_critical_i(cache_req_critical_lo[i])
        ,.cache_req_credits_full_i(cache_req_credits_full_lo[i])
@@ -269,7 +264,8 @@ module wrapper
 
            ,.cache_req_i(cache_req_lo[i])
            ,.cache_req_v_i(cache_req_v_lo[i])
-           ,.cache_req_ready_o(cache_req_ready_lo[i])
+           ,.cache_req_yumi_o(cache_req_yumi_lo[i])
+           ,.cache_req_busy_o(cache_req_busy_lo[i])
            ,.cache_req_metadata_i(cache_req_metadata_lo[i])
            ,.cache_req_metadata_v_i(cache_req_metadata_v_lo[i])
            ,.cache_req_critical_o(cache_req_critical_lo[i])
@@ -387,7 +383,8 @@ module wrapper
 
             ,.cache_req_i(cache_req_lo)
             ,.cache_req_v_i(cache_req_v_lo)
-            ,.cache_req_ready_o(cache_req_ready_lo)
+            ,.cache_req_yumi_o(cache_req_yumi_lo)
+            ,.cache_req_busy_o(cache_req_busy_lo)
             ,.cache_req_metadata_i(cache_req_metadata_lo)
             ,.cache_req_metadata_v_i(cache_req_metadata_v_lo)
             ,.cache_req_critical_o(cache_req_critical_lo)

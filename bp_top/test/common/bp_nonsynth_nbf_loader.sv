@@ -3,14 +3,13 @@
  *
  */
 
+`include "bp_common_defines.svh"
+`include "bp_top_defines.svh"
+
 module bp_nonsynth_nbf_loader
 
   import bp_common_pkg::*;
-  import bp_common_aviary_pkg::*;
-  import bp_cce_pkg::*;
-  import bp_common_cfg_link_pkg::*;
   import bp_be_pkg::*;
-  import bp_be_dcache_pkg::*;
   import bp_me_pkg::*;
 
  #(parameter bp_params_e bp_params_p = e_bp_default_cfg
@@ -20,7 +19,7 @@ module bp_nonsynth_nbf_loader
   ,parameter nbf_filename_p = "prog.nbf"
   ,parameter nbf_opcode_width_p = 8
   ,parameter nbf_addr_width_p = paddr_width_p
-  ,parameter nbf_data_width_p = dword_width_p
+  ,parameter nbf_data_width_p = dword_width_gp
 
   ,localparam nbf_width_lp = nbf_opcode_width_p + nbf_addr_width_p + nbf_data_width_p
   ,localparam max_nbf_index_lp = 2**26
@@ -39,13 +38,18 @@ module bp_nonsynth_nbf_loader
   ,input  [cce_mem_msg_width_lp-1:0]       io_resp_i
   ,input                                   io_resp_v_i
   ,output                                  io_resp_ready_o
+
+  ,output                                  done_o
   );
 
   enum logic [1:0] {
     RESET
     ,SEND_NBF
+    ,FENCE
     ,DONE
   } state_n, state_r;
+
+  assign done_o = (state_r == DONE);
 
   // response network not used
   wire unused_resp = &{io_resp_i, io_resp_v_i};
@@ -81,7 +85,6 @@ module bp_nonsynth_nbf_loader
 
   assign io_cmd_o = io_cmd;
   assign io_resp = io_resp_i;
-  assign io_cmd_v_o = ~credits_full_lo & (state_r == SEND_NBF);
 
   // read nbf file.
   logic [nbf_width_lp-1:0] nbf [max_nbf_index_lp-1:0];
@@ -105,17 +108,23 @@ module bp_nonsynth_nbf_loader
       default: io_cmd.header.size = e_bedrock_msg_size_4;
     endcase
   end
+  wire is_fence_packet = (curr_nbf.opcode == 8'hFE);
+  wire is_finish_packet = (curr_nbf.opcode == 8'hFF);
+  wire is_store_packet = ~is_fence_packet & ~is_finish_packet;
+
+  assign io_cmd_v_o = ~credits_full_lo & (state_r == SEND_NBF) & ~is_fence_packet & ~is_finish_packet;
 
   // read nbf file
   initial $readmemh(nbf_filename_p, nbf);
 
-  assign nbf_index_n = nbf_index_r + io_cmd_yumi_i;
+  assign nbf_index_n = nbf_index_r + (state_r == SEND_NBF && (io_cmd_yumi_i || is_fence_packet || is_finish_packet));
    // combinational
   always_comb
   begin
     unique casez (state_r)
       RESET       : state_n = reset_i ? RESET : SEND_NBF;
-      SEND_NBF    : state_n = (curr_nbf.opcode == 8'hFF) ? DONE : SEND_NBF;
+      SEND_NBF    : state_n = is_fence_packet ? FENCE: is_finish_packet ? DONE : SEND_NBF;
+      FENCE       : state_n = credits_empty_lo ? SEND_NBF : FENCE;
       DONE        : state_n = DONE;
       default : state_n = RESET;
     endcase
@@ -135,4 +144,8 @@ module bp_nonsynth_nbf_loader
       end
   end
 
+  always_ff @(negedge clk_i)
+    if (state_r != DONE && state_n == DONE) $display("NBF loader done!");
+
 endmodule
+

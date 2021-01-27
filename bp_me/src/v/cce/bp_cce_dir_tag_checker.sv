@@ -8,9 +8,11 @@
  *
  */
 
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
+
 module bp_cce_dir_tag_checker
   import bp_common_pkg::*;
-  import bp_cce_pkg::*;
   #(parameter tag_sets_per_row_p          = "inv"
     , parameter row_width_p               = "inv"
     , parameter assoc_p                   = "inv"

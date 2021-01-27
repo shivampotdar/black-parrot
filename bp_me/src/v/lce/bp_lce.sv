@@ -8,9 +8,11 @@
  *
  */
 
+`include "bp_common_defines.svh"
+`include "bp_me_defines.svh"
+
 module bp_lce
   import bp_common_pkg::*;
-  import bp_common_aviary_pkg::*;
  #(parameter bp_params_e bp_params_p = e_bp_default_cfg
    `declare_bp_proc_params(bp_params_p)
 
@@ -36,9 +38,7 @@ module bp_lce
     , localparam lg_block_size_in_bytes_lp = `BSG_SAFE_CLOG2(block_size_in_bytes_lp)
 
    `declare_bp_bedrock_lce_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, cce_id_width_p, lce_assoc_p, lce)
-   `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, sets_p, assoc_p, dword_width_p, block_width_p, fill_width_p, cache)
-
-    , localparam stat_info_width_lp = `bp_cache_stat_info_width(assoc_p)
+   `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, sets_p, assoc_p, dword_width_gp, block_width_p, fill_width_p, cache)
   )
   (
     input                                            clk_i
@@ -54,7 +54,8 @@ module bp_lce
     // can arrive, as indicated by the metadata_v_i signal
     , input [cache_req_width_lp-1:0]                 cache_req_i
     , input                                          cache_req_v_i
-    , output logic                                   cache_req_ready_o
+    , output logic                                   cache_req_yumi_o
+    , output logic                                   cache_req_busy_o
     , input [cache_req_metadata_width_lp-1:0]        cache_req_metadata_i
     , input                                          cache_req_metadata_v_i
     , output logic                                   cache_req_critical_o
@@ -79,7 +80,7 @@ module bp_lce
     , output logic                                   stat_mem_pkt_v_o
     , output logic [cache_stat_mem_pkt_width_lp-1:0] stat_mem_pkt_o
     , input                                          stat_mem_pkt_yumi_i
-    , input [stat_info_width_lp-1:0]                 stat_mem_i
+    , input [cache_stat_info_width_lp-1:0]           stat_mem_i
 
     // LCE-CCE interface
     // Req: ready->valid
@@ -144,7 +145,9 @@ module bp_lce
       ,.ready_o(req_ready_lo)
 
       ,.cache_req_i(cache_req_i)
-      ,.cache_req_v_i(cache_req_v_i)
+      // Gate the cache_req_v_i signal to prevent yumis when busy
+      ,.cache_req_v_i(~cache_req_busy_o & cache_req_v_i)
+      ,.cache_req_yumi_o(cache_req_yumi_o)
       ,.cache_req_metadata_i(cache_req_metadata_i)
       ,.cache_req_metadata_v_i(cache_req_metadata_v_i)
       ,.cache_req_complete_i(cache_req_complete_o)
@@ -159,7 +162,7 @@ module bp_lce
       );
 
   // LCE Command Module
-  logic cmd_ready_lo;
+  logic cmd_ready_lo, cmd_busy_lo;
   bp_lce_cmd
     #(.bp_params_p(bp_params_p)
       ,.assoc_p(assoc_p)
@@ -217,7 +220,7 @@ module bp_lce
   // LCE can read/write to data_mem, tag_mem, and stat_mem during cycles the cache itself is
   // not using them. To prevent the LCE from stalling for too long while waiting for one of
   // these ports, or when processing an inbound LCE command, there is a timer that deasserts the
-  // LCE's cache_req_ready_o signal to prevent the cache from issuing a new request, thereby
+  // LCE's busy_o signal to prevent the cache from issuing a new request, thereby
   // freeing up a cycle for the LCE to use these resources.
 
   logic [`BSG_SAFE_CLOG2(timeout_max_limit_p+1)-1:0] timeout_cnt_r;
@@ -241,9 +244,9 @@ module bp_lce
   wire timeout = (timeout_cnt_r == timeout_max_limit_p);
 
   // LCE is ready to accept new cache requests if:
-  // - LCE Request module is ready (raised when in ready state and free credits exist)
+  // - LCE Request module is in ready state and free credits exist
   // - timout signal is low, indicating LCE isn't blocked on using data/tag/stat mem
   // - LCE Command module is ready to process commands (raised after initialization complete)
-  assign cache_req_ready_o = req_ready_lo & cmd_ready_lo & ~timeout;
+  assign cache_req_busy_o = cache_req_credits_full_o | timeout | ~cmd_ready_lo | ~req_ready_lo;
 
 endmodule

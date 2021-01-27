@@ -6,15 +6,14 @@
 
 `include "bsg_noc_links.vh"
 
+`include "bp_common_defines.svh"
+`include "bp_top_defines.svh"
+
 module bp_core_complex
  import bp_common_pkg::*;
- import bp_common_aviary_pkg::*;
  import bp_be_pkg::*;
- import bp_common_rv64_pkg::*;
- import bp_cce_pkg::*;
  import bsg_noc_pkg::*;
  import bsg_wormhole_router_pkg::*;
- import bp_common_cfg_link_pkg::*;
  import bp_me_pkg::*;
  #(parameter bp_params_e bp_params_p = e_bp_default_cfg
    `declare_bp_proc_params(bp_params_p)
@@ -59,7 +58,7 @@ module bp_core_complex
    , output [N:N][cc_x_dim_p-1:0][mem_noc_ral_link_width_lp-1:0] mem_resp_ver_link_o
    );
 
-  `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p);
+  `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p);
   `declare_bsg_ready_and_link_sif_s(coh_noc_flit_width_p, coh_noc_ral_link_s);
   `declare_bsg_ready_and_link_sif_s(mem_noc_flit_width_p, mem_noc_ral_link_s);
 

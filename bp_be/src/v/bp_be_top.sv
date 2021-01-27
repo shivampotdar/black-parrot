@@ -5,21 +5,19 @@
  *
  */
 
+`include "bp_common_defines.svh"
+`include "bp_be_defines.svh"
 
 module bp_be_top
  import bp_common_pkg::*;
- import bp_common_aviary_pkg::*;
- import bp_common_rv64_pkg::*;
  import bp_be_pkg::*;
- import bp_common_cfg_link_pkg::*;
- import bp_be_dcache_pkg::*;
  #(parameter bp_params_e bp_params_p = e_bp_default_cfg
    `declare_bp_proc_params(bp_params_p)
    `declare_bp_core_if_widths(vaddr_width_p, paddr_width_p, asid_width_p, branch_metadata_fwd_width_p)
-   `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_p, dcache_block_width_p, dcache_fill_width_p, dcache)
+   `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_gp, dcache_block_width_p, dcache_fill_width_p, dcache)
 
    // Default parameters
-   , localparam cfg_bus_width_lp = `bp_cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p)
+   , localparam cfg_bus_width_lp = `cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
 
    // VM parameters
    , localparam tlb_entry_width_lp = `bp_pte_entry_leaf_width(paddr_width_p)
@@ -44,7 +42,8 @@ module bp_be_top
    // signals to LCE
    , output logic [dcache_req_width_lp-1:0]          cache_req_o
    , output logic                                    cache_req_v_o
-   , input                                           cache_req_ready_i
+   , input                                           cache_req_yumi_i
+   , input                                           cache_req_busy_i
    , output logic [dcache_req_metadata_width_lp-1:0] cache_req_metadata_o
    , output logic                                    cache_req_metadata_v_o
    , input                                           cache_req_critical_i
@@ -96,8 +95,7 @@ module bp_be_top
 
   logic fpu_en_lo;
   logic fe_cmd_full_lo;
-  logic mem_ready_lo, long_ready_lo, sys_ready_lo;
-
+  logic mem_ready_lo, long_ready_lo, sys_ready_lo, ptw_busy_lo;
 
   logic flush;
   bp_be_director
@@ -140,9 +138,12 @@ module bp_be_top
      ,.mem_ready_i(mem_ready_lo)
      ,.long_ready_i(long_ready_lo)
      ,.sys_ready_i(sys_ready_lo)
+     ,.ptw_busy_i(ptw_busy_lo)
 
      ,.chk_dispatch_v_o(chk_dispatch_v)
      ,.dispatch_pkt_i(dispatch_pkt)
+     ,.iwb_pkt_i(iwb_pkt)
+     ,.fwb_pkt_i(fwb_pkt)
      );
 
   bp_be_scheduler
@@ -185,6 +186,7 @@ module bp_be_top
      ,.mem_ready_o(mem_ready_lo)
      ,.long_ready_o(long_ready_lo)
      ,.sys_ready_o(sys_ready_lo)
+     ,.ptw_busy_o(ptw_busy_lo)
 
      ,.ptw_fill_pkt_o(ptw_fill_pkt)
 
@@ -196,7 +198,8 @@ module bp_be_top
      ,.cache_req_o(cache_req_o)
      ,.cache_req_metadata_o(cache_req_metadata_o)
      ,.cache_req_v_o(cache_req_v_o)
-     ,.cache_req_ready_i(cache_req_ready_i)
+     ,.cache_req_yumi_i(cache_req_yumi_i)
+     ,.cache_req_busy_i(cache_req_busy_i)
      ,.cache_req_metadata_v_o(cache_req_metadata_v_o)
      ,.cache_req_critical_i(cache_req_critical_i)
      ,.cache_req_complete_i(cache_req_complete_i)
