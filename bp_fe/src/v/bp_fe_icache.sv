@@ -37,7 +37,7 @@ module bp_fe_icache
  #(parameter bp_params_e bp_params_p = e_bp_default_cfg
    `declare_bp_proc_params(bp_params_p)
    `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, icache_sets_p, icache_assoc_p, dword_width_gp, icache_block_width_p, icache_fill_width_p, icache)
-   , localparam cfg_bus_width_lp = `cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
+   , localparam cfg_bus_width_lp = `bp_cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
 
    , localparam icache_pkt_width_lp = `bp_fe_icache_pkt_width(vaddr_width_p)
    )
@@ -416,7 +416,8 @@ module bp_fe_icache
      );
 
   // invalid way takes priority over LRU way
-  assign cache_req_metadata_cast_o.repl_way = invalid_exist ? way_invalid_index : lru_encode;
+  assign cache_req_metadata_cast_o.hit_or_repl_way = invalid_exist ? way_invalid_index : lru_encode;
+  assign cache_req_metadata_cast_o.hit_or_repl = '0;
   assign cache_req_metadata_cast_o.dirty = '0;
 
   /////////////////////////////////////////////////////////////////////////////

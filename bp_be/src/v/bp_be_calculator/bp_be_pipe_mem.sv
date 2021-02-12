@@ -20,7 +20,7 @@ module bp_be_pipe_mem
    `declare_bp_proc_params(bp_params_p)
    `declare_bp_cache_engine_if_widths(paddr_width_p, ptag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_gp, dcache_block_width_p, dcache_fill_width_p, dcache)
    // Generated parameters
-   , localparam cfg_bus_width_lp       = `cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
+   , localparam cfg_bus_width_lp       = `bp_cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
    , localparam dispatch_pkt_width_lp  = `bp_be_dispatch_pkt_width(vaddr_width_p)
    , localparam ptw_miss_pkt_width_lp  = `bp_be_ptw_miss_pkt_width(vaddr_width_p)
    , localparam ptw_fill_pkt_width_lp  = `bp_be_ptw_fill_pkt_width(vaddr_width_p)
@@ -306,9 +306,10 @@ module bp_be_pipe_mem
       end
       else begin
         dcache_pkt_v = reservation.v & ~reservation.poison & (decode.pipe_mem_early_v | decode.pipe_mem_final_v);
-        dcache_pkt.opcode      = bp_be_dcache_fu_op_e'(decode.fu_op);
-        dcache_pkt.page_offset = eaddr[0+:page_offset_width_gp];
-        dcache_pkt.data        = rs2;
+        dcache_pkt.opcode        = bp_be_dcache_fu_op_e'(decode.fu_op);
+        dcache_pkt.page_offset   = eaddr[0+:page_offset_width_gp];
+        dcache_pkt.no_amo_return = decode.no_amo_return;
+        dcache_pkt.data          = rs2;
         dcache_ptag = dtlb_ptag_lo;
         dcache_ptag_v = dtlb_v_lo;
       end

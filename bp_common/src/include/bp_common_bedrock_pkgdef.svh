@@ -40,11 +40,12 @@
    */
   typedef enum logic [3:0]
   {
-    e_bedrock_mem_rd       = 4'b0000  // Cache block fetch / load / Get (cached in L2/LLC)
-    ,e_bedrock_mem_wr      = 4'b0001  // Cache block write / writeback / store / Put (cached in L2/LLC)
-    ,e_bedrock_mem_uc_rd   = 4'b0010  // Uncached load (uncached in L2/LLC)
-    ,e_bedrock_mem_uc_wr   = 4'b0011  // Uncached store (uncached in L2/LLC)
-    ,e_bedrock_mem_pre     = 4'b0100  // Pre-fetch block request from CCE, fill into L2/LLC if able
+    // Basic mandatory support
+    e_bedrock_mem_rd        = 4'b0000  // Cache block fetch / load / Get (cached in L2/LLC)
+    ,e_bedrock_mem_wr       = 4'b0001  // Cache block write / writeback / store / Put (cached in L2/LLC)
+    ,e_bedrock_mem_uc_rd    = 4'b0010  // Uncached load (uncached in L2/LLC)
+    ,e_bedrock_mem_uc_wr    = 4'b0011  // Uncached store (uncached in L2/LLC)
+    ,e_bedrock_mem_pre      = 4'b0100  // Pre-fetch block request from CCE, fill into L2/LLC if able
     // Atomic support
     ,e_bedrock_mem_lr       = 4'b0101
     ,e_bedrock_mem_sc       = 4'b0110
@@ -100,7 +101,7 @@
     ,e_bedrock_cmd_st_tr           = 4'b1001 // set state and transfer block
     ,e_bedrock_cmd_st_tr_wb        = 4'b1010 // set state, transfer, and writeback block
     ,e_bedrock_cmd_uc_data         = 4'b1011 // uncached data to LCE
-    ,e_bedrock_cmd_uc_req_done     = 4'b1100 // uncached req complete
+    ,e_bedrock_cmd_uc_req_done     = 4'b1100 // uncached req complete message, no data to LCE
     // 4'b1101 - 4'b1111 reserved / custom
   } bp_bedrock_cmd_type_e;
 
