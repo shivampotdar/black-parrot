@@ -764,7 +764,7 @@ module bp_cce_fsm
       end // wb
 
       // amo
-      else if (mem_resp.header.msg_type inside {e_lce_req_type_amoswap
+      else if (mem_resp.header.msg_type inside {e_bedrock_req_amoswap
                                        , e_bedrock_req_amoadd
                                        , e_bedrock_req_amoxor
                                        , e_bedrock_req_amoand
@@ -804,7 +804,7 @@ module bp_cce_fsm
           lce_cmd_busy = lce_cmd_v_o;
 
           lce_cmd_payload.dst_id = mem_resp_payload.lce_id;
-          lce_cmd.header.msg_type = e_lce_cmd_uc_data;
+          lce_cmd.header.msg_type = e_bedrock_cmd_uc_data;
           lce_cmd.data = mem_resp.data;
           lce_cmd.header.addr = mem_resp.header.addr;
           lce_cmd.header.size = mem_resp.header.size;
@@ -937,7 +937,7 @@ module bp_cce_fsm
           end // uncached request
 
           // amo requests
-          end else if (lce_req_v_i & (lce_req.header.msg_type.req inside
+          else if ((lce_req.header.msg_type.req inside
                                       {e_bedrock_req_amoswap
                                        , e_bedrock_req_amoadd
                                        , e_bedrock_req_amoxor
@@ -1153,7 +1153,7 @@ module bp_cce_fsm
         endcase
 
         mem_cmd.header.addr = mshr_r.paddr;
-        mem_cmd.header.payload.lce_id = mshr_r.lce_id;
+        mem_cmd_payload.lce_id = mshr_r.lce_id;
         mem_cmd.header.size = lce_req.header.size;
 
         mem_cmd.header.amo_no_return = lce_req.header.amo_no_return;
@@ -1635,8 +1635,8 @@ module bp_cce_fsm
               mem_cmd.data = lce_resp.data;
 
               state_n = (lce_resp_yumi_o)
-                        ? e_uc_coherent_mem_cmd
-                        : e_uc_coherent_resp;
+                        ? e_amo_uc_coherent_mem_cmd
+                        : e_amo_uc_coherent_resp;
 
               // set the pending bit
               pending_w_v = lce_resp_yumi_o;

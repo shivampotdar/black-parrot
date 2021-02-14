@@ -672,7 +672,7 @@ module bp_be_dcache
     end
     else if (l2_amo_req & ~uncached_load_data_v_r) begin
       cache_req_v_o = ~flush_i;
-      unique if (lr_req)
+      unique if (lr_req) begin
         cache_req_cast_o.msg_type  = e_amo_lr;
         cache_req_cast_o.no_return = decode_tv_r.no_return;
       end
@@ -1105,7 +1105,7 @@ module bp_be_dcache
 
   // stat_mem
   //
-  assign stat_mem_v_li = (v_tv_r & ~(uncached_tv_r & ~decode_tv_r.l2_op) & ~decode_tv_r.fencei_op & ~poison_i) | stat_mem_pkt_yumi_o;
+  assign stat_mem_v_li = (v_tv_r & ~(uncached_tv_r & ~decode_tv_r.l2_op) & ~decode_tv_r.fencei_op & ~flush_i) | stat_mem_pkt_yumi_o;
   assign stat_mem_w_li = stat_mem_pkt_yumi_o
     ? (stat_mem_pkt.opcode != e_cache_stat_mem_read)
     : ~miss_tv & ~decode_tv_r.l2_op;

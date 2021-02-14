@@ -272,7 +272,7 @@ module bp_lce_req
           ? e_bedrock_req_rd
           : e_bedrock_req_wr;
 
-        lce_req_payload.lru_way_id = lg_lce_assoc_lp'(cache_req_metadata_r.repl_way);
+        lce_req_payload.lru_way_id = lg_lce_assoc_lp'(cache_req_metadata_r.hit_or_repl_way);
         lce_req_payload.non_exclusive = (cache_req_r.msg_type == e_miss_load)
           ? (non_excl_reads_p == 1)
             ? e_bedrock_req_non_excl
@@ -313,10 +313,10 @@ module bp_lce_req
         // send when port is ready and metadata has arrived
         lce_req_v_o = lce_req_ready_i & cache_req_metadata_v_r;
 
-        lce_req.data[0+:dword_width_p] = cache_req_r.data[0+:dword_width_p];
+        lce_req.data[0+:dword_width_gp] = cache_req_r.data[0+:dword_width_gp];
 
         lce_req.header.addr = cache_req_r.addr;
-        lce_req.header.size = bp_mem_msg_size_e'(cache_req_r.size);
+        lce_req.header.size = bp_bedrock_msg_size_e'(cache_req_r.size);
         lce_req.header.amo_no_return = cache_req_r.no_return;
         unique case (cache_req_r.msg_type)
           e_amo_swap: lce_req.header.msg_type = e_bedrock_req_amoswap;

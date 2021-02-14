@@ -447,7 +447,7 @@ module bp_uce
 
   // We ack mem_resps for uncached stores no matter what, so mem_resp_yumi_lo is for other responses
   logic mem_resp_yumi_lo;
-  assign mem_resp_yumi_o = mem_resp_yumi_lo | store_resp_v_li | (amo_op_resp_v_li & cache_req_r.no_return);
+  assign mem_resp_yumi_o = mem_resp_yumi_lo | store_resp_v_li | (amo_op_resp_v_li & mem_resp_cast_i.header.amo_no_return);
   assign cache_req_busy_o = is_reset | is_clear | cache_req_credits_full_o;
   always_comb
     begin
@@ -547,6 +547,7 @@ module bp_uce
             mem_cmd_cast_o.header.msg_type = e_bedrock_mem_wr;
             mem_cmd_cast_o.header.addr     = {dirty_tag_r.tag, index_cnt, {assoc_p > 1{bank_index}}, byte_offset_width_lp'(0)};
             mem_cmd_cast_o.header.size     = block_msg_size_lp;
+            mem_cmd_cast_o.header.amo_no_return = '0;
             mem_cmd_cast_payload.lce_id    = lce_id_i;
             mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
             mem_cmd_cast_o.data                  = writeback_data;
@@ -580,6 +581,7 @@ module bp_uce
                 mem_cmd_cast_o.header.msg_type       = e_bedrock_mem_uc_wr;
                 mem_cmd_cast_o.header.addr           = cache_req_cast_i.addr;
                 mem_cmd_cast_o.header.size           = bp_bedrock_msg_size_e'(cache_req_cast_i.size);
+                mem_cmd_cast_o.header.amo_no_return  = cache_req_cast_i.no_return;
                 mem_cmd_cast_payload.lce_id          = lce_id_i;
                 mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
                 mem_cmd_cast_o.data                  = cache_req_cast_i.data;
@@ -590,6 +592,7 @@ module bp_uce
                 mem_cmd_cast_o.header.msg_type       = e_bedrock_mem_wr;
                 mem_cmd_cast_o.header.addr           = cache_req_cast_i.addr;
                 mem_cmd_cast_o.header.size           = bp_bedrock_msg_size_e'(cache_req_cast_i.size);
+                mem_cmd_cast_o.header.amo_no_return  = cache_req_cast_i.no_return;
                 mem_cmd_cast_payload.lce_id          = lce_id_i;
                 mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
                 mem_cmd_cast_o.data                  = cache_req_cast_i.data;
@@ -651,6 +654,7 @@ module bp_uce
             mem_cmd_cast_o.header.msg_type = e_bedrock_mem_wr;
             mem_cmd_cast_o.header.addr     = {cache_req_r.addr[paddr_width_p-1:block_offset_width_lp], bank_index, byte_offset_width_lp'(0)};
             mem_cmd_cast_o.header.size     = block_msg_size_lp;
+            mem_cmd_cast_o.header.amo_no_return  = '0;
             mem_cmd_cast_payload.lce_id    = lce_id_i;
             mem_cmd_cast_o.header.payload  = mem_cmd_cast_payload;
             mem_cmd_cast_o.data            = writeback_data;
@@ -667,6 +671,7 @@ module bp_uce
               mem_cmd_cast_o.header.msg_type       = e_bedrock_mem_rd;
               mem_cmd_cast_o.header.addr           = critical_addr;
               mem_cmd_cast_o.header.size           = block_msg_size_lp;
+              mem_cmd_cast_o.header.amo_no_return  = cache_req_r.no_return;
               mem_cmd_cast_payload.way_id          = lce_assoc_p'(cache_req_metadata_r.hit_or_repl_way);
               mem_cmd_cast_payload.lce_id          = lce_id_i;
               mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
@@ -683,6 +688,7 @@ module bp_uce
               mem_cmd_cast_o.header.msg_type       = e_bedrock_mem_uc_rd;
               mem_cmd_cast_o.header.addr           = cache_req_r.addr;
               mem_cmd_cast_o.header.size           = bp_bedrock_msg_size_e'(cache_req_r.size);
+              mem_cmd_cast_o.header.amo_no_return  = cache_req_r.no_return;
               mem_cmd_cast_payload.lce_id          = lce_id_i;
               mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
               mem_cmd_v_o = mem_cmd_ready_i;
@@ -711,13 +717,14 @@ module bp_uce
                                                                      ? e_bedrock_mem_amo_maxu
                                                                      : e_bedrock_mem_amo_swap;
               mem_cmd_cast_o.header.addr           = cache_req_r.addr;
-              mem_cmd_cast_o.header.size           = (cache_req_r.size == e_size_4B) ? e_mem_msg_size_4 : e_mem_msg_size_8;
+              mem_cmd_cast_o.header.size           = (cache_req_r.size == e_size_4B) ? e_bedrock_msg_size_4 : e_bedrock_msg_size_8;
+              mem_cmd_cast_o.header.amo_no_return  = cache_req_r.no_return;
               mem_cmd_cast_payload.lce_id          = lce_id_i;
               mem_cmd_cast_o.header.payload        = mem_cmd_cast_payload;
               mem_cmd_cast_o.data                  = cache_req_r.data;
               mem_cmd_v_o = mem_cmd_ready_i;
 
-              state_n = mem_cmd_v_o ? e_uc_read_wait : e_send_critical;
+              state_n = mem_cmd_v_o ? (cache_req_r.no_return ? e_ready :e_uc_read_wait) : e_send_critical;
             end
         e_writeback_evict:
           begin
@@ -764,6 +771,7 @@ module bp_uce
             mem_cmd_cast_o.header.addr           = {cache_req_r.addr[paddr_width_p-1:block_offset_width_lp], {assoc_p > 1{bank_index}}, byte_offset_width_lp'(0)};
             mem_cmd_cast_o.header.size           = block_msg_size_lp;
             mem_cmd_cast_payload.way_id          = lce_assoc_p'(cache_req_metadata_r.hit_or_repl_way);
+            mem_cmd_cast_o.header.amo_no_return  = cache_req_r.no_return;
             mem_cmd_cast_payload.lce_id          = lce_id_i;
             mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
             mem_cmd_v_o = mem_cmd_ready_i & ~mem_cmd_done_r & ~cache_req_credits_full_o;
@@ -777,6 +785,7 @@ module bp_uce
             mem_cmd_cast_o.header.msg_type = e_bedrock_mem_wr;
             mem_cmd_cast_o.header.addr     = {dirty_tag_r.tag, cache_req_r.addr[block_offset_width_lp+:index_width_lp], {assoc_p > 1{bank_index}}, byte_offset_width_lp'(0)};
             mem_cmd_cast_o.header.size     = block_msg_size_lp;
+            mem_cmd_cast_o.header.amo_no_return  = cache_req_r.no_return;
             mem_cmd_cast_payload.lce_id    = lce_id_i;
             mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
             mem_cmd_cast_o.data                  = writeback_data;
@@ -810,6 +819,7 @@ module bp_uce
             mem_cmd_cast_o.header.msg_type       = e_bedrock_mem_rd;
             mem_cmd_cast_o.header.addr           = {cache_req_r.addr[paddr_width_p-1:block_offset_width_lp], {assoc_p > 1{bank_index}}, byte_offset_width_lp'(0)};
             mem_cmd_cast_o.header.size           = block_msg_size_lp;
+            mem_cmd_cast_o.header.amo_no_return  = cache_req_r.no_return;
             mem_cmd_cast_payload.way_id          = lce_assoc_p'(cache_req_metadata_r.hit_or_repl_way);
             mem_cmd_cast_payload.lce_id          = lce_id_i;
             mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;

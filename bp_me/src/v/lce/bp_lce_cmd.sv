@@ -537,7 +537,7 @@ module bp_lce_cmd
 
             // Uncached Req Done
             // uncached store has committed to memory or amo op done
-            e_bedrock_cmd_uc_st_done: begin
+            e_bedrock_cmd_uc_req_done: begin
               // dequeue message and assert request complete signal for a cycle
               lce_cmd_yumi_o = lce_cmd_v_i;
               uc_req_complete_o = lce_cmd_yumi_o;
