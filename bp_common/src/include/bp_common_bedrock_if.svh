@@ -45,7 +45,6 @@
     typedef struct packed                                                                   \
     {                                                                                       \
       logic [payload_width_mp-1:0]                 payload;                                 \
-      logic                                        amo_no_return;                           \
       bp_bedrock_msg_size_e                        size;                                    \
       logic [addr_width_mp-1:0]                    addr;                                    \
       bp_bedrock_msg_u                             msg_type;                                \
@@ -74,7 +73,6 @@
                                                                                        \
     typedef struct packed                                                              \
     {                                                                                  \
-      logic                                        no_amo_return;                      \
       logic [`BSG_SAFE_CLOG2(lce_assoc_mp)-1:0]    lru_way_id;                         \
       bp_bedrock_req_non_excl_e                    non_exclusive;                      \
       logic                                        amo_no_return;                      \

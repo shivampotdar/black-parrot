@@ -317,7 +317,6 @@ module bp_lce_req
 
         lce_req.header.addr = cache_req_r.addr;
         lce_req.header.size = bp_bedrock_msg_size_e'(cache_req_r.size);
-        lce_req.header.amo_no_return = cache_req_r.no_return;
         unique case (cache_req_r.msg_type)
           e_amo_swap: lce_req.header.msg_type = e_bedrock_req_amoswap;
           e_amo_add: lce_req.header.msg_type = e_bedrock_req_amoadd;
@@ -332,6 +331,7 @@ module bp_lce_req
         endcase
 
         lce_req_payload.lru_way_id = lg_lce_assoc_lp'(cache_req_metadata_r.hit_or_repl_way);
+        lce_req_payload.amo_no_return = cache_req_r.no_return;
         lce_req.header.payload = lce_req_payload;
 
         state_n = lce_req_v_o
