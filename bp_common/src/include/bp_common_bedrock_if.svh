@@ -319,7 +319,7 @@
    */
   
   `define bp_bedrock_msg_header_width(addr_width_mp, payload_width_mp) \
-    ($bits(bp_bedrock_msg_u)+addr_width_mp+$bits(bp_bedrock_msg_size_e)+payload_width_mp+1)
+    ($bits(bp_bedrock_msg_u)+addr_width_mp+$bits(bp_bedrock_msg_size_e)+payload_width_mp)
 
   `define bp_bedrock_msg_width(addr_width_mp, payload_width_mp, data_width_mp) \
     (`bp_bedrock_msg_header_width(addr_width_mp, payload_width_mp)+data_width_mp)

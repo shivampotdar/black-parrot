@@ -129,7 +129,6 @@ module bp_me_cache_slice
   assign mem_cmd_header_cast_o = '{msg_type       : dma_pkt_lo.write_not_read ? e_bedrock_mem_wr : e_bedrock_mem_rd
                                    ,size          : mem_cmd_block_size
                                    ,addr          : dma_pkt_lo.addr
-                                   ,amo_no_return : '0
                                    ,payload       : '0
                                    };
   assign mem_cmd_header_v_o = dma_pkt_v_lo;

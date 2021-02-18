@@ -775,7 +775,7 @@ module bp_cce_fsm
                                        , e_bedrock_req_amomaxu
                                        }) begin
 
-        if (mem_resp.header.amo_no_return) begin
+        if (mem_resp_payload.amo_no_return) begin
           // handshaking
           lce_cmd_v_o = lce_cmd_ready_i & mem_resp_v_i;
           mem_resp_yumi_o = lce_cmd_ready_i & mem_resp_v_i;
@@ -968,7 +968,7 @@ module bp_cce_fsm
 
             mem_cmd.header.addr = lce_req.header.addr;
             mem_cmd.header.size = lce_req.header.size;
-            mem_cmd.header.amo_no_return = lce_req.header.amo_no_return;
+            mem_cmd_payload.amo_no_return = lce_req_payload.amo_no_return;
             // this op is uncached in LCE
             mem_cmd_payload.uncached = 1'b1;
 
@@ -1087,7 +1087,7 @@ module bp_cce_fsm
             // atomic request
             mshr_n.flags[e_opd_arf] = 1'b1;
             // set atomic no return flag
-            mshr_n.flags[e_opd_anrf] = lce_req.header.amo_no_return;
+            mshr_n.flags[e_opd_anrf] = lce_req_payload.amo_no_return;
 
             // query PMA for coherence property
             // amo requests can be made to coherent or incoherent memory regions
@@ -1156,7 +1156,7 @@ module bp_cce_fsm
         mem_cmd_payload.lce_id = mshr_r.lce_id;
         mem_cmd.header.size = lce_req.header.size;
 
-        mem_cmd.header.amo_no_return = lce_req.header.amo_no_return;
+        mem_cmd_payload.amo_no_return = lce_req_payload.amo_no_return;
         // this op is uncached in LCE
         mem_cmd_payload.uncached = 1'b1;
         mem_cmd.header.payload = mem_cmd_payload;
@@ -1679,7 +1679,7 @@ module bp_cce_fsm
           // in the LCE request (which is stored in the MSHR)
           mem_cmd.header.addr = mshr_r.paddr;
           mem_cmd.header.size = mshr_r.msg_size;
-          mem_cmd.header.amo_no_return = mshr_r.flags[e_opd_anrf];
+          mem_cmd_payload.amo_no_return = mshr_r.flags[e_opd_anrf];
           mem_cmd_payload.lce_id = mshr_r.lce_id;
           mem_cmd_payload.way_id = '0;
           // this op is uncached in LCE for both amo or uncached requests
